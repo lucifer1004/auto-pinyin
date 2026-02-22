@@ -1,2 +1,9 @@
 /**/.DS_Store
 *.pdf
+
+# WASM build artifacts
+wasm/target/
+wasm/Cargo.lock
+
+# Test outputs
+tests/*.pdf

@@ -1,0 +1,23 @@
+[package]
+name = "easy-pinyin-wasm"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-minimal-protocol = "0.1"
+pinyin = { path = "../rust-pinyin", default-features = false, features = [
+    "plain",
+    "with_tone",
+    "with_tone_num",
+    "with_tone_num_end",
+] }
+
+[profile.release]
+lto = true
+opt-level = 'z'
+codegen-units = 1
+panic = 'abort'
+strip = true

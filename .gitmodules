@@ -1,0 +1,3 @@
+[submodule "rust-pinyin"]
+	path = rust-pinyin
+	url = https://github.com/mozillazg/rust-pinyin.git
