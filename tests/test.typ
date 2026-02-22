@@ -187,3 +187,32 @@ Mixed with style "plain":
 
 Mixed with style "first-letter":
 我们学习#auto-zhuyin("中文", style: "first-letter", scale: 0.6)很有趣。
+
+== Test 11: Override parameter for polyphonic characters
+
+The override parameter allows manual override of specific characters, useful for polyphonic characters (多音字).
+
+Basic override example - "重庆" (Chóngqìng):
+- Without override: #auto-zhuyin("重庆") (重 may be wrong: zho4ng)
+- With override: #auto-zhuyin("重庆", override: (重: "cho2ng")) (重 is correct: cho2ng)
+
+Multiple character override:
+- Without override: #auto-zhuyin("重庆大学")
+- With override: #auto-zhuyin("重庆大学", override: (重: "cho2ng", 庆: "qi4ng"))
+
+Override with different styles:
+- Plain style with override: #auto-zhuyin("重庆", style: "plain", override: (重: "chong"))
+- First-letter with override: #auto-zhuyin("重庆", style: "first-letter", override: (重: "c"))
+
+Override with delimiter:
+- Without override: #auto-zhuyin("重庆|大学", delimiter: "|")
+- With override: #auto-zhuyin("重庆|大学", delimiter: "|", override: (重: "cho2ng"))
+
+Comparison table:
+#table(
+  columns: (auto, auto, auto),
+  align: (center + horizon, center, center),
+  [Method], [Output], [Notes],
+  [Auto], [#auto-zhuyin("重庆")], [May be incorrect],
+  [Override], [#auto-zhuyin("重庆", override: (重: "cho2ng"))], [Correct pronunciation],
+)

@@ -187,6 +187,9 @@
 ///   - "tone": with tone marks (e.g., "pīn")
 ///   - "plain": without tone (e.g., "pin")
 ///   - "first-letter": first letter only (e.g., "p")
+/// - override: dictionary (default: (:)) - character to pinyin mapping for manual override
+///   - Useful for polyphonic characters (多音字) or special pronunciations
+///   - Example: (重: "cho2ng") to override "重" in "重庆"
 /// - scale: number (default: 0.7) - font size scale for pinyin
 /// - gutter: length (default: 0.3em) - spacing between text and pinyin
 /// - spacing: length or none (default: none) - spacing between character groups
@@ -200,9 +203,11 @@
 ///   #auto-zhuyin("汉语拼音", style: "plain")          // Each character without tone
 ///   #auto-zhuyin("汉语|拼音", delimiter: "|")         // Grouped by delimiter
 ///   #auto-zhuyin("汉语", style: "first-letter")       // First letters only
+///   #auto-zhuyin("重庆大学", override: (重: "cho2ng")) // Override specific characters
 #let auto-zhuyin(
   doc,
   style: "tone-num",
+  override: (:),
   scale: 0.7,
   gutter: 0.3em,
   spacing: none,
@@ -219,11 +224,20 @@
   // - "first-letter": just letters, no need to apply pinyin()
   let format-ruby = (style == "tone-num")
 
+  // Helper: Get pinyin for a character, checking override first
+  let get-pinyin = (c) => {
+    if c in override {
+      override.at(c)
+    } else {
+      to-pinyin(c, style: style)
+    }
+  }
+
   if delimiter == none {
     // Process character by character using clusters()
     let result = ()
     for c in s.clusters() {
-      let pinyin-str = to-pinyin(c, style: style)
+      let pinyin-str = get-pinyin(c)
       result.push(_make-single-zhuyin(
         c,
         pinyin-str,
@@ -239,7 +253,11 @@
   let groups = s.split(delimiter)
   let result = ()
   for g in groups {
-    let pinyin-str = to-pinyin(g, style: style)
+    // Build pinyin for the group, respecting overrides
+    let pinyin-str = ""
+    for c in g.clusters() {
+      pinyin-str += get-pinyin(c)
+    }
     result.push(_make-single-zhuyin(
       g,
       pinyin-str,
