@@ -190,7 +190,9 @@ Mixed with style "first-letter":
 
 == Test 11: Override parameter for polyphonic characters
 
-The override parameter allows manual override of specific characters, useful for polyphonic characters (多音字).
+The override parameter allows manual override of specific characters or phrases, useful for polyphonic characters (多音字).
+
+=== Single character override
 
 Basic override example - "重庆" (Chóngqìng):
 - Without override: #auto-zhuyin("重庆") (重 may be wrong: zho4ng)
@@ -208,11 +210,37 @@ Override with delimiter:
 - Without override: #auto-zhuyin("重庆|大学", delimiter: "|")
 - With override: #auto-zhuyin("重庆|大学", delimiter: "|", override: (重: "cho2ng"))
 
-Comparison table:
+=== Phrase override (new feature)
+
+Phrase override treats multiple characters as a single unit with one pinyin annotation.
+
+Basic phrase override - "重庆" as a phrase:
+- Single char override: #auto-zhuyin("重庆大学", override: (重: "cho2ng")) (each char separate)
+- Phrase override: #auto-zhuyin("重庆大学", override: (重庆: "cho2ngqi4ng")) (phrase as one unit)
+
+Greedy matching (longest match wins):
+- Override with both phrase and single char: #auto-zhuyin("重庆重庆", override: (重庆: "cho2ngqi4ng", 重: "zho4ng"))
+- Expected: First "重庆" matches the phrase, second "重" matches single char (if any remaining)
+
+Phrase override comparison table:
 #table(
   columns: (auto, auto, auto),
   align: (center + horizon, center, center),
   [Method], [Output], [Notes],
-  [Auto], [#auto-zhuyin("重庆")], [May be incorrect],
-  [Override], [#auto-zhuyin("重庆", override: (重: "cho2ng"))], [Correct pronunciation],
+  [Auto], [#auto-zhuyin("重庆大学")], [Auto-generated, may be wrong],
+  [Single char], [#auto-zhuyin("重庆大学", override: (重: "cho2ng"))], [Override one char],
+  [Phrase], [#auto-zhuyin("重庆大学", override: (重庆: "cho2ngqi4ng"))], [Override phrase as one],
 )
+
+=== Practical example
+
+A real-world example showing phrase override in context:
+
+- Without override: #auto-zhuyin("重庆最重要的几所大学", scale: 0.6)
+- With phrase override: #auto-zhuyin("重庆最重要的几所大学", override: (重庆: "cho2ngqi4ng"), scale: 0.6)
+
+Note: "重庆" is correctly pronounced as "Chóngqìng" (not "Zhòngqìng"), and other characters are auto-generated.
+
+Phrase override with delimiter:
+- Without override: #auto-zhuyin("重庆|大学", delimiter: "|")
+- With phrase override: #auto-zhuyin("重庆|大学", delimiter: "|", override: (重庆: "cho2ngqi4ng"))

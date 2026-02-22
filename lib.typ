@@ -187,9 +187,12 @@
 ///   - "tone": with tone marks (e.g., "pīn")
 ///   - "plain": without tone (e.g., "pin")
 ///   - "first-letter": first letter only (e.g., "p")
-/// - override: dictionary (default: (:)) - character to pinyin mapping for manual override
-///   - Useful for polyphonic characters (多音字) or special pronunciations
-///   - Example: (重: "cho2ng") to override "重" in "重庆"
+/// - override: dictionary (default: (:)) - character/phrase to pinyin mapping for manual override
+///   - Supports both single characters and multi-character phrases
+///   - Uses greedy matching: longer phrases are matched first
+///   - Useful for polyphonic characters (多音字) or fixed phrases
+///   - Example: (重: "cho2ng") for single character
+///   - Example: (重庆: "cho2ngqi4ng") for phrase (displayed as one annotation)
 /// - scale: number (default: 0.7) - font size scale for pinyin
 /// - gutter: length (default: 0.3em) - spacing between text and pinyin
 /// - spacing: length or none (default: none) - spacing between character groups
@@ -203,7 +206,8 @@
 ///   #auto-zhuyin("汉语拼音", style: "plain")          // Each character without tone
 ///   #auto-zhuyin("汉语|拼音", delimiter: "|")         // Grouped by delimiter
 ///   #auto-zhuyin("汉语", style: "first-letter")       // First letters only
-///   #auto-zhuyin("重庆大学", override: (重: "cho2ng")) // Override specific characters
+///   #auto-zhuyin("重庆", override: (重: "cho2ng"))     // Override single character
+///   #auto-zhuyin("重庆大学", override: (重庆: "cho2ngqi4ng")) // Override phrase
 #let auto-zhuyin(
   doc,
   style: "tone-num",
@@ -224,27 +228,74 @@
   // - "first-letter": just letters, no need to apply pinyin()
   let format-ruby = (style == "tone-num")
 
-  // Helper: Get pinyin for a character, checking override first
-  let get-pinyin = (c) => {
-    if c in override {
-      override.at(c)
-    } else {
-      to-pinyin(c, style: style)
+  // Helper: Get all override keys sorted by length (longest first) for greedy matching
+  let override-keys-sorted = override.keys().sorted(key: (k) => k.clusters().len()).rev()
+
+  // Helper: Try to match a phrase in override starting at position i
+  // Returns (matched-text, pinyin, length) or none
+  let try-match-override = (clusters, start-i) => {
+    for key in override-keys-sorted {
+      let key-clusters = key.clusters()
+      let key-len = key-clusters.len()
+
+      // Check if remaining text is long enough
+      if start-i + key-len > clusters.len() {
+        continue
+      }
+
+      // Check if text matches
+      let matches = true
+      for j in range(key-len) {
+        if clusters.at(start-i + j) != key-clusters.at(j) {
+          matches = false
+          break
+        }
+      }
+
+      if matches {
+        return (key, override.at(key), key-len)
+      }
     }
+    return none
+  }
+
+  // Helper: Get pinyin for a single character (for auto-generation)
+  let get-auto-pinyin = (c) => {
+    to-pinyin(c, style: style)
   }
 
   if delimiter == none {
-    // Process character by character using clusters()
+    // Process with phrase override support using greedy matching
     let result = ()
-    for c in s.clusters() {
-      let pinyin-str = get-pinyin(c)
-      result.push(_make-single-zhuyin(
-        c,
-        pinyin-str,
-        scale: scale,
-        gutter: gutter,
-        format-ruby: format-ruby,
-      ))
+    let clusters = s.clusters()
+    let i = 0
+
+    while i < clusters.len() {
+      // Try to match a phrase override first (greedy: longest match wins)
+      let match-result = try-match-override(clusters, i)
+
+      if match-result != none {
+        let (matched-text, pinyin-str, len) = match-result
+        result.push(_make-single-zhuyin(
+          matched-text,
+          pinyin-str,
+          scale: scale,
+          gutter: gutter,
+          format-ruby: format-ruby,
+        ))
+        i += len
+      } else {
+        // No override match, use auto-generated pinyin
+        let c = clusters.at(i)
+        result.push(_make-single-zhuyin(
+          c,
+          get-auto-pinyin(c),
+          scale: scale,
+          gutter: gutter,
+          format-ruby: format-ruby,
+        ))
+        i += 1
+      }
     }
     return result.join(if spacing != none [#h(spacing)])
   }
@@ -253,11 +304,24 @@
   let groups = s.split(delimiter)
   let result = ()
   for g in groups {
-    // Build pinyin for the group, respecting overrides
+    // Build pinyin for the group with phrase override support
+    let group-clusters = g.clusters()
     let pinyin-str = ""
-    for c in g.clusters() {
-      pinyin-str += get-pinyin(c)
+    let i = 0
+
+    while i < group-clusters.len() {
+      let match-result = try-match-override(group-clusters, i)
+
+      if match-result != none {
+        let (_, pinyin, len) = match-result
+        pinyin-str += pinyin
+        i += len
+      } else {
+        pinyin-str += get-auto-pinyin(group-clusters.at(i))
+        i += 1
+      }
     }
+
     result.push(_make-single-zhuyin(
       g,
       pinyin-str,

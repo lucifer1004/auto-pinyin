@@ -52,6 +52,10 @@ The `auto-zhuyin` function automatically generates pinyin from Chinese character
 // Override specific characters (useful for polyphonic characters)
 #auto-zhuyin("重庆", override: (重: "cho2ng"))  // "重" is "chóng" not "zhòng"
 #auto-zhuyin("重庆大学", override: (重: "cho2ng", 庆: "qi4ng"))
+
+// Phrase override (multiple characters as one annotation)
+#auto-zhuyin("重庆大学", override: (重庆: "cho2ngqi4ng"))  // "重庆" as one unit
+#auto-zhuyin("重庆最重要的几所大学", override: (重庆: "cho2ngqi4ng"))  // Context example
 ```
 
 ### Convert Chinese to Pinyin String
@@ -192,9 +196,12 @@ Add ruby annotation with auto-generated pinyin.
   - `"tone"`: with tone marks (e.g., "pīn")
   - `"plain"`: without tone (e.g., "pin")
   - `"first-letter"`: first letter only (e.g., "p")
-- `override`: dictionary (default: `(:)`) - character to pinyin mapping for manual override
-  - Useful for polyphonic characters (多音字) or special pronunciations
-  - Example: `(重: "cho2ng")` to override "重" in "重庆"
+- `override`: dictionary (default: `(:)`) - character/phrase to pinyin mapping for manual override
+  - Supports both single characters and multi-character phrases
+  - Uses greedy matching: longer phrases are matched first
+  - Useful for polyphonic characters (多音字) or fixed phrases
+  - Single character: `(重: "cho2ng")` - override one character
+  - Phrase: `(重庆: "cho2ngqi4ng")` - override phrase as one annotation
 - `scale`: number (default: `0.7`) - font size scale for pinyin
 - `gutter`: length (default: `0.3em`) - spacing between text and pinyin
 - `spacing`: length or none (default: `none`) - spacing between character groups
