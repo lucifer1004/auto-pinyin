@@ -1,235 +1,136 @@
 // Load the WASM plugin for pinyin conversion
-#let _plugin = plugin("easy-pinyin.wasm")
+#let _plugin = plugin("auto-pinyin.wasm")
 
-/// Convert a Chinese character string to pinyin string.
+// ============================================
+// Version Information
+// ============================================
+
+/// Get version information about auto-pinyin and its dependencies.
+///
+/// Returns: string - version information including auto-pinyin version
+///   and rust-pinyin commit id.
+///
+/// Example:
+///   #version()  // → "auto-pinyin: 0.1.0\nrust-pinyin commit: abc123..."
+#let version() = {
+  str(_plugin.version())
+}
+
+// ============================================
+// Internal Helper Functions
+// ============================================
+
+/// Extract text from string or content
+/// Returns: string or none if extraction fails
+#let _extract-text(input) = {
+  if type(input) == str {
+    input
+  } else if type(input) == content and "text" in input.fields() {
+    input.text
+  } else {
+    none
+  }
+}
+
+/// Convert a single character to pinyin using WASM plugin
+/// Internal function - assumes input is validated
+#let _char-to-pinyin(char, style: "tone-num") = {
+  if style == "tone-num" {
+    str(_plugin.char_to_pinyin(bytes(char)))
+  } else if style == "tone-num-end" {
+    str(_plugin.char_to_pinyin_tone_num_end(bytes(char)))
+  } else if style == "tone" {
+    str(_plugin.char_to_pinyin_tone(bytes(char)))
+  } else if style == "plain" {
+    str(_plugin.char_to_pinyin_plain(bytes(char)))
+  } else if style == "first-letter" {
+    str(_plugin.char_to_pinyin_first_letter(bytes(char)))
+  } else {
+    panic(
+      "Invalid style: '"
+        + style
+        + "'. Valid options: tone-num, tone-num-end, tone, plain, first-letter",
+    )
+  }
+}
+
+/// Convert a single character to multiple pinyin readings using WASM plugin
+/// Internal function - assumes input is validated
+#let _char-to-pinyin-multi(char, style: "tone-num") = {
+  let result-str = if style == "tone-num" {
+    str(_plugin.char_to_pinyin_multi(bytes(char)))
+  } else if style == "tone-num-end" {
+    str(_plugin.char_to_pinyin_multi_tone_num_end(bytes(char)))
+  } else if style == "tone" {
+    str(_plugin.char_to_pinyin_multi_tone(bytes(char)))
+  } else if style == "plain" {
+    str(_plugin.char_to_pinyin_multi_plain(bytes(char)))
+  } else if style == "first-letter" {
+    str(_plugin.char_to_pinyin_multi_first_letter(bytes(char)))
+  } else {
+    panic(
+      "Invalid style: '"
+        + style
+        + "'. Valid options: tone-num, tone-num-end, tone, plain, first-letter",
+    )
+  }
+
+  result-str.split("|")
+}
+
+// ============================================
+// Public API Functions
+// ============================================
+
+/// Convert Chinese characters to an array of pinyin strings.
+///
+/// This function converts each Chinese character in the input to its pinyin
+/// representation. Non-Chinese characters are preserved as-is in the array.
 ///
 /// Parameters:
 /// - chars: string or content - Chinese characters to convert
 /// - style: string (default: "tone-num") - pinyin output style
-///   - "tone-num": tone number after vowel (e.g., "pi1n")
-///   - "tone-num-end": tone number at end (e.g., "pin1")
-///   - "tone": with tone marks (e.g., "pīn")
-///   - "plain": without tone (e.g., "pin")
-///   - "first-letter": first letter only (e.g., "p")
-/// - delimiter: string or none (default: none) - separator between each character's pinyin
-///
-/// Non-Chinese characters are passed through unchanged.
-///
-/// Examples:
-///   #to-pinyin("汉语")                                  // → "ha4nyu3"
-///   #to-pinyin("汉语", style: "tone-num-end")           // → "han4yu3"
-///   #to-pinyin("汉语", style: "tone")                   // → "hànyǔ"
-///   #to-pinyin("汉语", style: "plain")                  // → "hanyu"
-///   #to-pinyin("汉语", style: "first-letter")           // → "hy"
-///   #to-pinyin("汉语", delimiter: "|")                  // → "ha4n|yu3"
-///   #to-pinyin("汉语", style: "plain", delimiter: "|")  // → "han|yu"
-#let to-pinyin(chars, style: "tone-num", delimiter: none) = {
-  let s = if type(chars) == str { chars } else { chars.text }
-
-  // Select the appropriate plugin function based on style
-  let result = if delimiter == none {
-    // No delimiter
-    if style == "tone-num" {
-      str(_plugin.to_pinyin(bytes(s)))
-    } else if style == "tone-num-end" {
-      str(_plugin.to_pinyin_tone_num_end(bytes(s)))
-    } else if style == "tone" {
-      str(_plugin.to_pinyin_tone(bytes(s)))
-    } else if style == "plain" {
-      str(_plugin.to_pinyin_plain(bytes(s)))
-    } else if style == "first-letter" {
-      str(_plugin.to_pinyin_first_letter(bytes(s)))
-    } else {
-      panic(
-        "Invalid style: "
-          + style
-          + ". Valid options: tone-num, tone-num-end, tone, plain, first-letter",
-      )
-    }
-  } else {
-    // With delimiter
-    if style == "tone-num" {
-      str(_plugin.to_pinyin_delimited(bytes(s), bytes(str(delimiter))))
-    } else if style == "tone-num-end" {
-      str(_plugin.to_pinyin_tone_num_end_delimited(bytes(s), bytes(
-        str(delimiter),
-      )))
-    } else if style == "tone" {
-      str(_plugin.to_pinyin_tone_delimited(bytes(s), bytes(str(delimiter))))
-    } else if style == "plain" {
-      str(_plugin.to_pinyin_plain_delimited(bytes(s), bytes(str(delimiter))))
-    } else if style == "first-letter" {
-      str(_plugin.to_pinyin_first_letter_delimited(bytes(s), bytes(
-        str(delimiter),
-      )))
-    } else {
-      panic(
-        "Invalid style: "
-          + style
-          + ". Valid options: tone-num, tone-num-end, tone, plain, first-letter",
-      )
-    }
-  }
-
-  result
-}
-
-/// Convert pinyin notation with tone numbers to proper pinyin with tone marks.
-/// e.g., "a1" -> "ɑ̄", "e2" -> "é", "v4" -> "ǜ"
-#let pinyin(doc) = {
-  show "a": [ɑ]
-  show "a1": [ɑ̄]
-  show "a2": [ɑ́]
-  show "a3": [ɑ̌]
-  show "a4": [ɑ̀]
-
-  show "e1": [ē]
-  show "e2": [é]
-  show "e3": [ě]
-  show "e4": [è]
-
-  show "i1": [ī]
-  show "i2": [í]
-  show "i3": [ǐ]
-  show "i4": [ì]
-
-  show "o1": [ō]
-  show "o2": [ó]
-  show "o3": [ǒ]
-  show "o4": [ò]
-
-  show "u1": [ū]
-  show "u2": [ú]
-  show "u3": [ǔ]
-  show "u4": [ù]
-
-  show "v": [ü]
-  show "v1": [ǖ]
-  show "v2": [ǘ]
-  show "v3": [ǚ]
-  show "v4": [ǜ]
-
-  doc
-}
-
-/// Add zhuyin (ruby annotation) above the text with manually specified pinyin.
-/// Parameters:
-/// - doc: main text content
-/// - ruby: zhuyin/pinyin content to display above
-/// - scale: font size scale of ruby (default 0.7)
-/// - gutter: spacing between doc and ruby (default 0.3em)
-/// - delimiter: if not none, split doc and ruby by this character
-/// - spacing: spacing between each parts (default none)
-/// Internal helper to create a single zhuyin annotation
-/// If format-ruby is true, applies pinyin() to the ruby text
-#let _make-single-zhuyin(
-  doc,
-  ruby,
-  scale: 0.7,
-  gutter: 0.3em,
-  format-ruby: true,
-) = {
-  let ruby-content = if format-ruby { pinyin(ruby) } else { ruby }
-  box(align(
-    bottom,
-    table(
-      columns: (auto,),
-      align: (center,),
-      inset: 0pt,
-      stroke: none,
-      row-gutter: gutter,
-      text(1em * scale, ruby-content),
-      doc,
-    ),
-  ))
-}
-
-#let zhuyin(
-  doc,
-  ruby,
-  scale: 0.7,
-  gutter: 0.3em,
-  delimiter: none,
-  spacing: none,
-) = {
-  if delimiter == none {
-    return _make-single-zhuyin(
-      doc,
-      ruby,
-      scale: scale,
-      gutter: gutter,
-      format-ruby: true,
-    )
-  }
-
-  let extract-text(thing) = if type(thing) == str { thing } else { thing.text }
-  let chars = extract-text(doc).split(delimiter)
-  let aboves = extract-text(ruby).split(delimiter)
-
-  if chars.len() != aboves.len() {
-    error("count of character and zhuyin is different")
-  }
-
-  chars
-    .zip(aboves)
-    .map(((c, above)) => [#zhuyin(scale: scale)[#c][#above]])
-    .join(if spacing != none [#h(spacing)])
-}
-
-/// Add zhuyin (ruby annotation) above the text with automatically generated pinyin.
-/// This function automatically converts Chinese characters to pinyin using the WASM plugin.
-///
-/// Parameters:
-/// - doc: string or content - Chinese text
-/// - style: string (default: "tone-num") - pinyin output style
-///   - "tone-num": tone number after vowel (e.g., "pi1n")
-///   - "tone-num-end": tone number at end (e.g., "pin1")
-///   - "tone": with tone marks (e.g., "pīn")
-///   - "plain": without tone (e.g., "pin")
-///   - "first-letter": first letter only (e.g., "p")
-/// - override: dictionary (default: (:)) - character/phrase to pinyin mapping for manual override
-///   - Supports both single characters and multi-character phrases
+///   - "tone-num": tone number after vowel (e.g., "ha4n")
+///   - "tone-num-end": tone number at end (e.g., "han4")
+///   - "tone": with tone marks (e.g., "hàn")
+///   - "plain": without tone (e.g., "han")
+///   - "first-letter": first letter only (e.g., "h")
+/// - override: dictionary (default: (:)) - character/phrase to pinyin mapping
+///   - Keys can be single characters or multi-character phrases
+///   - Values: single-char key can be `str` or `array`, multi-char key must be `array`
+///   - Array values: each element corresponds to one character's pinyin
 ///   - Uses greedy matching: longer phrases are matched first
 ///   - Useful for polyphonic characters (多音字) or fixed phrases
-///   - Example: (重: "cho2ng") for single character
-///   - Example: (重庆: "cho2ngqi4ng") for phrase (displayed as one annotation)
-/// - scale: number (default: 0.7) - font size scale for pinyin
-/// - gutter: length (default: 0.3em) - spacing between text and pinyin
-/// - spacing: length or none (default: none) - spacing between character groups
-/// - delimiter: string or none (default: none) - character to split input into groups
 ///
-/// When delimiter is none (default), each character gets its own pinyin annotation.
-/// When delimiter is specified (e.g., "|"), characters between delimiters are grouped together.
+/// Returns: array of strings - one pinyin string per character or phrase
 ///
 /// Examples:
-///   #auto-zhuyin("汉语拼音")                          // Each character with tone number
-///   #auto-zhuyin("汉语拼音", style: "plain")          // Each character without tone
-///   #auto-zhuyin("汉语|拼音", delimiter: "|")         // Grouped by delimiter
-///   #auto-zhuyin("汉语", style: "first-letter")       // First letters only
-///   #auto-zhuyin("重庆", override: (重: "cho2ng"))     // Override single character
-///   #auto-zhuyin("重庆大学", override: (重庆: "cho2ngqi4ng")) // Override phrase
-#let auto-zhuyin(
-  doc,
-  style: "tone-num",
-  override: (:),
-  scale: 0.7,
-  gutter: 0.3em,
-  spacing: none,
-  delimiter: none,
-) = {
-  let extract-text(thing) = if type(thing) == str { thing } else { thing.text }
-  let s = extract-text(doc)
+///   #to-pinyin("汉语")                              // → ("ha4n", "yu3")
+///   #to-pinyin("汉语", style: "plain")              // → ("han", "yu")
+///   #to-pinyin("Hello世界")                         // → ("H", "e", "l", "l", "o", "shi4", "jie4")
+///   #to-pinyin("重庆", override: (重: "cho2ng"))    // → ("cho2ng", "qi4ng")
+///
+///   // User can join the array as needed:
+///   #to-pinyin("汉语").join("")                     // → "ha4nyu3"
+///   #to-pinyin("汉语").join(" ")                    // → "ha4n yu3"
+#let to-pinyin(chars, style: "tone-num", override: (:)) = {
+  // Extract text from input
+  let s = _extract-text(chars)
+  if s == none {
+    panic("to-pinyin: input must be a string or content with text field")
+  }
 
-  // Decide whether to apply pinyin() formatting based on style
-  // - "tone-num": apply pinyin() to convert tone numbers to marks (e.g., "a1" -> "ɑ̄")
-  // - "tone-num-end": don't apply pinyin() because tone position is inconsistent
-  // - "tone": already has tone marks, no need to apply pinyin()
-  // - "plain": no tone info, no need to apply pinyin()
-  // - "first-letter": just letters, no need to apply pinyin()
-  let format-ruby = (style == "tone-num")
+  // If no override, convert character by character
+  if override == (:) {
+    return s.clusters().map(c => _char-to-pinyin(c, style: style))
+  }
 
-  // Helper: Get all override keys sorted by length (longest first) for greedy matching
-  let override-keys-sorted = override.keys().sorted(key: (k) => k.clusters().len()).rev()
+  // With override: process with greedy matching
+  // Sort override keys by length (longest first) for greedy matching
+  let override-keys-sorted = override
+    .keys()
+    .sorted(key: k => k.clusters().len())
+    .rev()
 
   // Helper: Try to match a phrase in override starting at position i
   // Returns (matched-text, pinyin, length) or none
@@ -253,137 +154,117 @@
       }
 
       if matches {
-        return (key, override.at(key), key-len)
+        let value = override.at(key)
+        // Validate override value: single-char can be str|array, multi-char must be array
+        let pinyin-array = if type(value) == str {
+          if key-len > 1 {
+            panic(
+              "Multi-character override key '"
+                + key
+                + "' must have array value, got string: '"
+                + value
+                + "'",
+            )
+          }
+          (value,)
+        } else if type(value) == array {
+          if value.len() != key-len {
+            panic(
+              "Override value array length ("
+                + str(value.len())
+                + ") doesn't match key length ("
+                + str(key-len)
+                + ") for '"
+                + key
+                + "'",
+            )
+          }
+          value
+        } else {
+          panic(
+            "Override value must be string or array, got " + str(type(value)),
+          )
+        }
+        return (key, pinyin-array, key-len)
       }
     }
     return none
   }
 
-  // Helper: Get pinyin for a single character (for auto-generation)
-  let get-auto-pinyin = (c) => {
-    to-pinyin(c, style: style)
-  }
-
-  if delimiter == none {
-    // Process with phrase override support using greedy matching
-    let result = ()
-    let clusters = s.clusters()
-    let i = 0
-
-    while i < clusters.len() {
-      // Try to match a phrase override first (greedy: longest match wins)
-      let match-result = try-match-override(clusters, i)
-
-      if match-result != none {
-        let (matched-text, pinyin-str, len) = match-result
-        result.push(_make-single-zhuyin(
-          matched-text,
-          pinyin-str,
-          scale: scale,
-          gutter: gutter,
-          format-ruby: format-ruby,
-        ))
-        i += len
-      } else {
-        // No override match, use auto-generated pinyin
-        let c = clusters.at(i)
-        result.push(_make-single-zhuyin(
-          c,
-          get-auto-pinyin(c),
-          scale: scale,
-          gutter: gutter,
-          format-ruby: format-ruby,
-        ))
-        i += 1
-      }
-    }
-    return result.join(if spacing != none [#h(spacing)])
-  }
-
-  // Process by delimiter
-  let groups = s.split(delimiter)
+  // Process character by character with override support
+  let clusters = s.clusters()
   let result = ()
-  for g in groups {
-    // Build pinyin for the group with phrase override support
-    let group-clusters = g.clusters()
-    let pinyin-str = ""
-    let i = 0
+  let i = 0
 
-    while i < group-clusters.len() {
-      let match-result = try-match-override(group-clusters, i)
+  while i < clusters.len() {
+    // Try to match a phrase override first (greedy: longest match wins)
+    let match-result = try-match-override(clusters, i)
 
-      if match-result != none {
-        let (_, pinyin, len) = match-result
-        pinyin-str += pinyin
-        i += len
-      } else {
-        pinyin-str += get-auto-pinyin(group-clusters.at(i))
-        i += 1
+    if match-result != none {
+      let (matched-text, pinyin-array, len) = match-result
+      // Add each pinyin from the override array
+      for pinyin in pinyin-array {
+        result.push(pinyin)
       }
+      i += len
+    } else {
+      // No override match, use auto-generated pinyin
+      let c = clusters.at(i)
+      result.push(_char-to-pinyin(c, style: style))
+      i += 1
     }
-
-    result.push(_make-single-zhuyin(
-      g,
-      pinyin-str,
-      scale: scale,
-      gutter: gutter,
-      format-ruby: format-ruby,
-    ))
   }
-  result.join(if spacing != none [#h(spacing)])
+
+  result
 }
 
-/*
+/// Get all possible pinyin readings for a Chinese character (heteronym).
+///
+/// For heteronyms (多音字), this function returns all possible pinyin
+/// readings as an array. For non-Chinese characters, returns a single-element
+/// array containing the character itself.
+///
+/// When given a multi-character string, returns an array of arrays,
+/// where each element is the array of readings for that character.
+///
+/// Parameters:
+/// - char: string or content - Chinese character(s) to process
+/// - style: string (default: "tone-num") - pinyin output style
+///   - "tone-num": tone number after vowel (e.g., "ha2i")
+///   - "tone-num-end": tone number at end (e.g., "hai2")
+///   - "tone": with tone marks (e.g., "hái")
+///   - "plain": without tone (e.g., "hai")
+///   - "first-letter": first letter only (e.g., "h")
+///
+/// Returns:
+///   - Single character: array of strings - all possible pinyin readings
+///   - Multiple characters: array of arrays - readings per character
+///
+/// Examples:
+///   #to-pinyin-multi("还")                      // → ("ha2i", "hua2n", "fu2")
+///   #to-pinyin-multi("还", style: "plain")      // → ("hai", "huan", "fu")
+///   #to-pinyin-multi("还", style: "tone")       // → ("hái", "huán", "fú")
+///
+///   // User can join readings as needed:
+///   #to-pinyin-multi("还").join("|")            // → "ha2i|hua2n|fu2"
+///   #to-pinyin-multi("还").first()              // → "ha2i" (most common reading)
+///
+///   // Multiple characters:
+///   #to-pinyin-multi("还没")                    // → (("ha2i", "hua2n", "fu2"), ("me2i", "mo4", "me"))
+#let to-pinyin-multi(char, style: "tone-num") = {
+  // Extract text from input
+  let s = _extract-text(char)
+  if s == none {
+    panic("to-pinyin-multi: input must be a string or content with text field")
+  }
 
-#set text(
-   lang: "zh", region: "cn",
-   font: ("LXGW WenKai", ),
-   fallback: false,
-)
+  let clusters = s.clusters()
 
-// Manual pinyin usage (original API)
-汉（#pinyin[ha4n]）语（#pinyin[yu3]）拼（#pinyin[pi1n]）音（#pinyin[yi1n]）。
+  // Handle single character
+  if clusters.len() == 1 {
+    return _char-to-pinyin-multi(clusters.at(0), style: style)
+  }
 
-// Auto pinyin conversion
-#to-pinyin("汉语拼音")  // Returns "ha4nyu3pi1nyi1n"
-#to-pinyin-delimited("汉语拼音", delimiter: "|")  // Returns "ha4n|yu3|pi1n|yi1n"
-
-// Auto zhuyin - each character with its own pinyin
-#auto-zhuyin("汉语拼音")
-
-// Auto zhuyin with custom spacing
-#auto-zhuyin("汉语拼音", scale: 0.6, spacing: 0.1em)
-
-// Auto zhuyin with grouping
-#auto-zhuyin("汉语|拼音", delimiter: "|", spacing: 0.5em)
-
-// Comparison with manual zhuyin
-#let per-char(f) = [#f(delimiter: "|")[汉|语|拼|音][ha4n|yu3|pi1n|yi1n]]
-#let per-word(f) = [#f(delimiter: "|")[汉语|拼音][ha4nyu3|pi1nyi1n]]
-#let all-in-one(f) = [#f[汉语拼音][ha4nyu3pi1nyi1n]]
-#let example(f) = (per-char(f), per-word(f), all-in-one(f))
-
-// argument of scale and spacing
-#let arguments = ((0.5, none), (0.7, none), (0.7, 0.1em), (1.0, none), (1.0, 0.2em))
-
-#table(
-  columns: (auto, auto, auto, auto),
-  align: (center + horizon, center, center, center),
-  [arguments], [per char], [per word], [all in one],
-  ..arguments.map(((scale, spacing)) => (
-    text(size: 0.7em)[#scale,#repr(spacing)],
-    ..example(zhuyin.with(scale: scale, spacing: spacing))
-  )).flatten(),
-)
-
-// Auto zhuyin examples
-#table(
-  columns: (auto, auto, auto),
-  align: (center + horizon, center, center, center),
-  [function], [result], [notes],
-  [auto-zhuyin], [#auto-zhuyin("汉语拼音")], [character by character],
-  [auto-zhuyin with spacing], [#auto-zhuyin("汉语拼音", spacing: 0.1em)], [with spacing],
-  [auto-zhuyin with delimiter], [#auto-zhuyin("汉语|拼音", delimiter: "|", spacing: 0.5em)], [grouped by delimiter],
-)
-
-// */
+  // For multiple characters, return array of arrays
+  clusters.map(c => _char-to-pinyin-multi(c, style: style))
+}

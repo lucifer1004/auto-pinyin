@@ -1,19 +1,21 @@
 [package]
-name = "easy-pinyin"
-version = "0.2.0"
+name = "auto-pinyin"
+version = "0.1.0"
 entrypoint = "lib.typ"
-authors = ["7sDream <@7sDream>", "Other open-source contributors"]
+authors = ["Gabriel Wu <@lucifer1004>"]
 license = "MIT"
-description = "Convert Chinese characters to pinyin with ruby annotations."
-repository = "https://github.com/7sDream/typst-easy-pinyin"
-keywords = ["pinyin", "chinese", "ruby", "annotation", "linguistics"]
-categories = ["text", "utility"]
+description = "Convert Chinese to pinyin with multiple styles and overrides."
+repository = "https://github.com/lucifer1004/auto-pinyin"
+keywords = ["pinyin", "chinese", "conversion", "linguistics"]
+categories = ["text", "utility", "languages"]
 compiler = "0.14.0"
+
 exclude = [
-    "tests/",
     "wasm/",
     "rust-pinyin/",
     "Justfile",
+    "example.typ",
     ".gitignore",
     ".gitmodules",
+    ".jj/",
 ]

@@ -1,5 +1,5 @@
 [package]
-name = "easy-pinyin-wasm"
+name = "auto-pinyin-wasm"
 version = "0.1.0"
 edition = "2021"
 
@@ -13,6 +13,7 @@ pinyin = { path = "../rust-pinyin", default-features = false, features = [
     "with_tone",
     "with_tone_num",
     "with_tone_num_end",
+    "heteronym",
 ] }
 
 [profile.release]

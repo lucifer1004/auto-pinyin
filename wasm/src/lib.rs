@@ -1,13 +1,21 @@
-use pinyin::ToPinyin;
+use pinyin::{ToPinyin, ToPinyinMulti};
 use wasm_minimal_protocol::*;
 
 initiate_protocol!();
 
-/// Convert a single Chinese character to pinyin with tone number
-/// Returns the pinyin string (e.g., "ha4n" for "汉")
-/// If the character is not a Chinese character, returns the character itself
-#[wasm_func]
-pub fn char_to_pinyin(input: &[u8]) -> Vec<u8> {
+// Version information embedded at compile time
+const AUTO_PINYIN_VERSION: &str = env!("AUTO_PINYIN_VERSION");
+const RUST_PINYIN_COMMIT: &str = env!("RUST_PINYIN_COMMIT");
+
+// ============================================
+// Internal helper functions
+// ============================================
+
+/// Convert a single character to pinyin using the provided converter function
+fn convert_char<F>(input: &[u8], converter: F) -> Vec<u8>
+where
+    F: Fn(&pinyin::Pinyin) -> &'static str,
+{
     let s = match std::str::from_utf8(input) {
         Ok(s) => s,
         Err(_) => return input.to_vec(),
@@ -19,344 +27,133 @@ pub fn char_to_pinyin(input: &[u8]) -> Vec<u8> {
     };
 
     match ch.to_pinyin() {
-        Some(pinyin) => pinyin.with_tone_num().as_bytes().to_vec(),
+        Some(pinyin) => converter(&pinyin).as_bytes().to_vec(),
         None => input.to_vec(),
     }
 }
 
-/// Convert a string of Chinese characters to pinyin
-/// Returns pinyin strings joined without separator (e.g., "ha4nyu3" for "汉语")
-/// Non-Chinese characters are passed through unchanged
-#[wasm_func]
-pub fn to_pinyin(input: &[u8]) -> Vec<u8> {
+/// Convert a single character to multiple pinyin readings (heteronym)
+/// Returns readings separated by '|'
+fn convert_char_multi<F>(input: &[u8], converter: F) -> Vec<u8>
+where
+    F: Fn(&pinyin::Pinyin) -> &'static str,
+{
     let s = match std::str::from_utf8(input) {
         Ok(s) => s,
         Err(_) => return input.to_vec(),
     };
 
-    let mut result = Vec::new();
-
-    for ch in s.chars() {
-        match ch.to_pinyin() {
-            Some(pinyin) => {
-                result.extend_from_slice(pinyin.with_tone_num().as_bytes());
-            }
-            None => {
-                let mut buf = [0u8; 4];
-                result.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
-            }
-        }
-    }
-
-    result
-}
-
-/// Convert a string of Chinese characters to pinyin with delimiter between each character
-/// Returns pinyin strings separated by delimiter (e.g., "ha4n|yu3" for "汉语" with "|" delimiter)
-/// Non-Chinese characters are passed through unchanged
-#[wasm_func]
-pub fn to_pinyin_delimited(input: &[u8], delimiter: &[u8]) -> Vec<u8> {
-    let s = match std::str::from_utf8(input) {
-        Ok(s) => s,
-        Err(_) => return input.to_vec(),
+    let ch = match s.chars().next() {
+        Some(c) => c,
+        None => return Vec::new(),
     };
 
-    let mut result = Vec::new();
-    let mut first = true;
-
-    for ch in s.chars() {
-        if !first {
-            result.extend_from_slice(delimiter);
-        }
-        first = false;
-
-        match ch.to_pinyin() {
-            Some(pinyin) => {
-                result.extend_from_slice(pinyin.with_tone_num().as_bytes());
+    match ch.to_pinyin_multi() {
+        Some(multi) => {
+            let mut result = Vec::new();
+            let mut first = true;
+            for pinyin in multi {
+                if !first {
+                    result.push(b'|');
+                }
+                first = false;
+                result.extend_from_slice(converter(&pinyin).as_bytes());
             }
-            None => {
-                let mut buf = [0u8; 4];
-                result.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
-            }
+            result
         }
+        None => input.to_vec(),
     }
-
-    result
 }
 
 // ============================================
-// Plain pinyin functions (without tone marks)
+// Single character conversion functions
 // ============================================
+
+/// Convert a single Chinese character to pinyin with tone number after vowel
+/// Returns the pinyin string (e.g., "ha4n" for "汉")
+#[wasm_func]
+pub fn char_to_pinyin(input: &[u8]) -> Vec<u8> {
+    convert_char(input, |p| p.with_tone_num())
+}
 
 /// Convert a single Chinese character to plain pinyin (without tone)
 /// Returns the pinyin string (e.g., "han" for "汉")
-/// If the character is not a Chinese character, returns the character itself
 #[wasm_func]
 pub fn char_to_pinyin_plain(input: &[u8]) -> Vec<u8> {
-    let s = match std::str::from_utf8(input) {
-        Ok(s) => s,
-        Err(_) => return input.to_vec(),
-    };
-
-    let ch = match s.chars().next() {
-        Some(c) => c,
-        None => return Vec::new(),
-    };
-
-    match ch.to_pinyin() {
-        Some(pinyin) => pinyin.plain().as_bytes().to_vec(),
-        None => input.to_vec(),
-    }
+    convert_char(input, |p| p.plain())
 }
 
-/// Convert a string of Chinese characters to plain pinyin (without tone)
-/// Returns pinyin strings joined without separator (e.g., "hanyu" for "汉语")
-/// Non-Chinese characters are passed through unchanged
+/// Convert a single Chinese character to pinyin with tone marks
+/// Returns the pinyin string (e.g., "hàn" for "汉")
 #[wasm_func]
-pub fn to_pinyin_plain(input: &[u8]) -> Vec<u8> {
-    let s = match std::str::from_utf8(input) {
-        Ok(s) => s,
-        Err(_) => return input.to_vec(),
-    };
-
-    let mut result = Vec::new();
-
-    for ch in s.chars() {
-        match ch.to_pinyin() {
-            Some(pinyin) => {
-                result.extend_from_slice(pinyin.plain().as_bytes());
-            }
-            None => {
-                let mut buf = [0u8; 4];
-                result.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
-            }
-        }
-    }
-
-    result
+pub fn char_to_pinyin_tone(input: &[u8]) -> Vec<u8> {
+    convert_char(input, |p| p.with_tone())
 }
 
-/// Convert a string of Chinese characters to plain pinyin with delimiter between each character
-/// Returns pinyin strings separated by delimiter (e.g., "han|yu" for "汉语" with "|" delimiter)
-/// Non-Chinese characters are passed through unchanged
+/// Convert a single Chinese character to pinyin with tone number at end
+/// Returns the pinyin string (e.g., "han4" for "汉")
 #[wasm_func]
-pub fn to_pinyin_plain_delimited(input: &[u8], delimiter: &[u8]) -> Vec<u8> {
-    let s = match std::str::from_utf8(input) {
-        Ok(s) => s,
-        Err(_) => return input.to_vec(),
-    };
+pub fn char_to_pinyin_tone_num_end(input: &[u8]) -> Vec<u8> {
+    convert_char(input, |p| p.with_tone_num_end())
+}
 
-    let mut result = Vec::new();
-    let mut first = true;
-
-    for ch in s.chars() {
-        if !first {
-            result.extend_from_slice(delimiter);
-        }
-        first = false;
-
-        match ch.to_pinyin() {
-            Some(pinyin) => {
-                result.extend_from_slice(pinyin.plain().as_bytes());
-            }
-            None => {
-                let mut buf = [0u8; 4];
-                result.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
-            }
-        }
-    }
-
-    result
+/// Convert a single Chinese character to first letter of pinyin
+/// Returns the first letter (e.g., "h" for "汉")
+#[wasm_func]
+pub fn char_to_pinyin_first_letter(input: &[u8]) -> Vec<u8> {
+    convert_char(input, |p| p.first_letter())
 }
 
 // ============================================
-// Tone pinyin functions (with tone marks)
+// Heteronym (multi-reading) functions
 // ============================================
 
-/// Convert a string of Chinese characters to pinyin with tone marks
-/// Returns pinyin strings joined without separator (e.g., "hànyǔ" for "汉语")
-/// Non-Chinese characters are passed through unchanged
+/// Get all possible pinyin readings for a single Chinese character (heteronym)
+/// Returns readings separated by '|' (e.g., "ha2i|huan2|fu2" for "还")
 #[wasm_func]
-pub fn to_pinyin_tone(input: &[u8]) -> Vec<u8> {
-    let s = match std::str::from_utf8(input) {
-        Ok(s) => s,
-        Err(_) => return input.to_vec(),
-    };
-
-    let mut result = Vec::new();
-
-    for ch in s.chars() {
-        match ch.to_pinyin() {
-            Some(pinyin) => {
-                result.extend_from_slice(pinyin.with_tone().as_bytes());
-            }
-            None => {
-                let mut buf = [0u8; 4];
-                result.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
-            }
-        }
-    }
-
-    result
+pub fn char_to_pinyin_multi(input: &[u8]) -> Vec<u8> {
+    convert_char_multi(input, |p| p.with_tone_num())
 }
 
-/// Convert a string of Chinese characters to pinyin with tone marks and delimiter
-/// Returns pinyin strings separated by delimiter (e.g., "hàn|yǔ" for "汉语" with "|" delimiter)
-/// Non-Chinese characters are passed through unchanged
+/// Get all possible plain pinyin readings for a single Chinese character (heteronym)
+/// Returns readings separated by '|' (e.g., "hai|huan|fu" for "还")
 #[wasm_func]
-pub fn to_pinyin_tone_delimited(input: &[u8], delimiter: &[u8]) -> Vec<u8> {
-    let s = match std::str::from_utf8(input) {
-        Ok(s) => s,
-        Err(_) => return input.to_vec(),
-    };
+pub fn char_to_pinyin_multi_plain(input: &[u8]) -> Vec<u8> {
+    convert_char_multi(input, |p| p.plain())
+}
 
-    let mut result = Vec::new();
-    let mut first = true;
+/// Get all possible pinyin readings with tone marks for a single Chinese character (heteronym)
+/// Returns readings separated by '|' (e.g., "hái|huán|fú" for "还")
+#[wasm_func]
+pub fn char_to_pinyin_multi_tone(input: &[u8]) -> Vec<u8> {
+    convert_char_multi(input, |p| p.with_tone())
+}
 
-    for ch in s.chars() {
-        if !first {
-            result.extend_from_slice(delimiter);
-        }
-        first = false;
+/// Get all possible pinyin readings with tone number at end for a single Chinese character (heteronym)
+/// Returns readings separated by '|' (e.g., "hai2|huan2|fu2" for "还")
+#[wasm_func]
+pub fn char_to_pinyin_multi_tone_num_end(input: &[u8]) -> Vec<u8> {
+    convert_char_multi(input, |p| p.with_tone_num_end())
+}
 
-        match ch.to_pinyin() {
-            Some(pinyin) => {
-                result.extend_from_slice(pinyin.with_tone().as_bytes());
-            }
-            None => {
-                let mut buf = [0u8; 4];
-                result.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
-            }
-        }
-    }
-
-    result
+/// Get all possible first letters for a single Chinese character (heteronym)
+/// Returns letters separated by '|' (e.g., "h|h|f" for "还")
+#[wasm_func]
+pub fn char_to_pinyin_multi_first_letter(input: &[u8]) -> Vec<u8> {
+    convert_char_multi(input, |p| p.first_letter())
 }
 
 // ============================================
-// Tone number at end functions
+// Version information
 // ============================================
 
-/// Convert a string of Chinese characters to pinyin with tone number at the end
-/// Returns pinyin strings joined without separator (e.g., "han4yu3" for "汉语")
-/// Non-Chinese characters are passed through unchanged
+/// Get version information about auto-pinyin and its dependencies
+/// Returns formatted version information
 #[wasm_func]
-pub fn to_pinyin_tone_num_end(input: &[u8]) -> Vec<u8> {
-    let s = match std::str::from_utf8(input) {
-        Ok(s) => s,
-        Err(_) => return input.to_vec(),
-    };
-
-    let mut result = Vec::new();
-
-    for ch in s.chars() {
-        match ch.to_pinyin() {
-            Some(pinyin) => {
-                result.extend_from_slice(pinyin.with_tone_num_end().as_bytes());
-            }
-            None => {
-                let mut buf = [0u8; 4];
-                result.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
-            }
-        }
-    }
-
-    result
-}
-
-/// Convert a string of Chinese characters to pinyin with tone number at the end and delimiter
-/// Returns pinyin strings separated by delimiter (e.g., "han4|yu3" for "汉语" with "|" delimiter)
-/// Non-Chinese characters are passed through unchanged
-#[wasm_func]
-pub fn to_pinyin_tone_num_end_delimited(input: &[u8], delimiter: &[u8]) -> Vec<u8> {
-    let s = match std::str::from_utf8(input) {
-        Ok(s) => s,
-        Err(_) => return input.to_vec(),
-    };
-
-    let mut result = Vec::new();
-    let mut first = true;
-
-    for ch in s.chars() {
-        if !first {
-            result.extend_from_slice(delimiter);
-        }
-        first = false;
-
-        match ch.to_pinyin() {
-            Some(pinyin) => {
-                result.extend_from_slice(pinyin.with_tone_num_end().as_bytes());
-            }
-            None => {
-                let mut buf = [0u8; 4];
-                result.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
-            }
-        }
-    }
-
-    result
-}
-
-// ============================================
-// First letter functions
-// ============================================
-
-/// Convert a string of Chinese characters to first letters of pinyin
-/// Returns first letters joined without separator (e.g., "hy" for "汉语")
-/// Non-Chinese characters are passed through unchanged
-#[wasm_func]
-pub fn to_pinyin_first_letter(input: &[u8]) -> Vec<u8> {
-    let s = match std::str::from_utf8(input) {
-        Ok(s) => s,
-        Err(_) => return input.to_vec(),
-    };
-
-    let mut result = Vec::new();
-
-    for ch in s.chars() {
-        match ch.to_pinyin() {
-            Some(pinyin) => {
-                result.extend_from_slice(pinyin.first_letter().as_bytes());
-            }
-            None => {
-                let mut buf = [0u8; 4];
-                result.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
-            }
-        }
-    }
-
-    result
-}
-
-/// Convert a string of Chinese characters to first letters with delimiter
-/// Returns first letters separated by delimiter (e.g., "h|y" for "汉语" with "|" delimiter)
-/// Non-Chinese characters are passed through unchanged
-#[wasm_func]
-pub fn to_pinyin_first_letter_delimited(input: &[u8], delimiter: &[u8]) -> Vec<u8> {
-    let s = match std::str::from_utf8(input) {
-        Ok(s) => s,
-        Err(_) => return input.to_vec(),
-    };
-
-    let mut result = Vec::new();
-    let mut first = true;
-
-    for ch in s.chars() {
-        if !first {
-            result.extend_from_slice(delimiter);
-        }
-        first = false;
-
-        match ch.to_pinyin() {
-            Some(pinyin) => {
-                result.extend_from_slice(pinyin.first_letter().as_bytes());
-            }
-            None => {
-                let mut buf = [0u8; 4];
-                result.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
-            }
-        }
-    }
-
-    result
+pub fn version() -> Vec<u8> {
+    format!(
+        "auto-pinyin: {}\nrust-pinyin commit: {}",
+        AUTO_PINYIN_VERSION, RUST_PINYIN_COMMIT
+    )
+    .into_bytes()
 }
