@@ -2,8 +2,18 @@
 name = "easy-pinyin"
 version = "0.2.0"
 entrypoint = "lib.typ"
-authors = ["7sDream", "Other open-source contributors"]
+authors = ["7sDream <@7sDream>", "Other open-source contributors"]
 license = "MIT"
-description = "Write Chinese pinyin easily with automatic pinyin generation from Chinese characters."
+description = "Convert Chinese characters to pinyin with ruby annotations."
 repository = "https://github.com/7sDream/typst-easy-pinyin"
-files = ["lib.typ", "easy-pinyin.wasm", "README.md", "LICENSE"]
+keywords = ["pinyin", "chinese", "ruby", "annotation", "linguistics"]
+categories = ["text", "utility"]
+compiler = "0.14.0"
+exclude = [
+    "tests/",
+    "wasm/",
+    "rust-pinyin/",
+    "Justfile",
+    ".gitignore",
+    ".gitmodules",
+]
